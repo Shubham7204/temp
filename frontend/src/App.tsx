@@ -39,6 +39,24 @@ interface Message {
   denialReason?: string   // Reason for denial
 }
 
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+  password: string;
+  department: string;
+  employee_join_date: string;
+  employee_status: string;
+  last_security_training: string;
+  past_violations: number;
+  resource_sensitivity: string;
+  time_in_position: string;
+  user_role: string;
+  created_at: string;
+  updated_at: string;
+  __v: number;
+}
+
 interface Visualization {
   type: string
   title: string
@@ -68,9 +86,44 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [username, setUsername] = useState("user123") // TODO: Replace with actual user authentication
+  const [user, setUser] = useState<User | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    // Fetch user data when component mounts
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/users/current');
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+        // For now, use a default user for testing
+        setUser({
+          _id: '67f17cb4824dce811aecc4ed',
+          name: 'Shubham Mourya',
+          email: 'shubhammourya@gmail.com',
+          password: 'shubhampass',
+          department: 'Engineering',
+          employee_join_date: '2019-03-01T00:00:00.000+00:00',
+          employee_status: 'Part-time',
+          last_security_training: 'Never',
+          past_violations: 0,
+          resource_sensitivity: '',
+          time_in_position: '6 months',
+          user_role: 'Intern',
+          created_at: '2025-04-05T18:55:48.600+00:00',
+          updated_at: '2025-04-05T18:55:48.602+00:00',
+          __v: 0
+        });
+      }
+    };
+
+    fetchUser();
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -81,7 +134,7 @@ export default function App() {
   }, [messages])
 
   const handleSendMessage = async () => {
-    if (!input.trim() || isLoading) return
+    if (!input.trim() || isLoading || !user) return
 
     // Add user message
     const userMessage: Message = {
@@ -102,7 +155,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           query: userMessage.content,
-          username: username // Add username to the request
+          email: user.email // Send user email instead of username
         }),
       })
 

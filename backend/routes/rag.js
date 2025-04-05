@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const fetch = require("node-fetch"); // Ensure you have node-fetch installed (`npm install node-fetch@2`)
 const Ticket = require("../models/Ticket");
+const User = require("../models/User");
 
 // System prompt for Gemini response generation
 const createSystemPrompt = (context) => `
@@ -140,16 +141,33 @@ async function queryNamespaceAndGenerateResponse(req, res, namespace) {
 
 // Root endpoint to classify the query, check access, and route to namespace
 router.post("/", async (req, res) => {
-  const { query, username } = req.body;
+  const { query, email } = req.body;
   if (!query) return res.status(400).json({ error: "Query is required" });
-  if (!username) return res.status(400).json({ error: "Username is required" });
+  if (!email) return res.status(400).json({ error: "Email is required" });
 
   try {
+    // Find user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     // Step 1: Check access with the Python backend
     const accessResponse = await fetch("http://localhost:5001/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ 
+        query,
+        user_details: {
+          department: user.department,
+          employee_join_date: user.employee_join_date,
+          employee_status: user.employee_status,
+          last_security_training: user.last_security_training,
+          past_violations: user.past_violations,
+          time_in_position: user.time_in_position,
+          user_role: user.user_role
+        }
+      }),
     });
 
     const accessData = await accessResponse.json();
@@ -162,7 +180,7 @@ router.post("/", async (req, res) => {
 
     // Create a ticket for the access request
     const ticket = new Ticket({
-      username,
+      username: user.name,
       query,
       status: isApproved ? 'approved' : 'pending',
       mlDecision: {
@@ -170,7 +188,18 @@ router.post("/", async (req, res) => {
         inferred_data: accessData.inferred_data,
         model_outputs: accessData.model_outputs
       },
-      request_details: accessData.request_details
+      request_details: {
+        department: user.department,
+        employee_join_date: user.employee_join_date,
+        employee_status: user.employee_status,
+        last_security_training: user.last_security_training,
+        past_violations: user.past_violations,
+        request_reason: accessData.inferred_data.request_reason,
+        resource_sensitivity: accessData.inferred_data.resource_sensitivity,
+        resource_type: accessData.inferred_data.resource_type,
+        time_in_position: user.time_in_position,
+        user_role: user.user_role
+      }
     });
 
     await ticket.save();
